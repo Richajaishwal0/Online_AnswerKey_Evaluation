@@ -34,15 +34,19 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     setError(null);
+    setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const tokenResult = await cred.user.getIdTokenResult();
       const claimedRole = tokenResult.claims.role || 'teacher';
+      setUser(cred.user);
       setRole(claimedRole);
+      setLoading(false);
       return { success: true, role: claimedRole };
     } catch (err) {
       const msg = firebaseErrorMessage(err.code);
       setError(msg);
+      setLoading(false);
       return { success: false, error: msg };
     }
   };

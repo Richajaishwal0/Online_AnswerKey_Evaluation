@@ -21,9 +21,8 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = '/login';
-    }
+    // Do not automatically redirect to login on 401.
+    // Manual logout should be the only way to sign the user out.
     return Promise.reject(error);
   },
 );
