@@ -226,6 +226,13 @@ export class PapersService {
             totalConvertedMarks: paper.evaluation.totalConvertedMarks,
             targetMarks: paper.evaluation.targetMarks,
             remarks: paper.evaluation.remarks,
+            customMarks: (paper.evaluation.customMarks || []).map((c) => ({
+              questionNo:    c.questionNo    || c.label || '',
+              label:         c.label         || c.questionNo || '',
+              maxMarks:      c.maxMarks      ?? 0,
+              obtainedMarks: c.obtainedMarks ?? 0,
+              skipped:       c.skipped       ?? false,
+            })),
             marks: paper.evaluation.marks.map((m) => ({
               questionId: m.questionId,
               obtainedMarks: m.obtainedMarks,
@@ -261,7 +268,9 @@ export class EvaluationService {
     return evaluation;
   }
 
-  async saveEvaluationDraft(answersheetId, marks, remarks = "", targetMarks = 0) {
+  // marks        = [{ questionId, obtainedMarks }]          — DB-backed questions
+  // customMarks  = [{ label, obtainedMarks, maxMarks }]     — teacher-added free questions
+  async saveEvaluationDraft(answersheetId, marks, remarks = "", targetMarks = 0, customMarks = []) {
     const { AnswerSheetRepository, EvaluationRepository, MarkRepository } = await import("../repositories/index.js");
     const answerSheetRepo = new AnswerSheetRepository();
     const evaluationRepo = new EvaluationRepository();
@@ -277,40 +286,81 @@ export class EvaluationService {
     }
 
     let totalObtained = 0;
-    const maxMarksTotal = answerSheet.exam.totalMarks;
 
+    // --- DB questions (validated against exam questions) ---
     for (const mark of marks) {
       const question = answerSheet.exam.questions.find((q) => q.id === mark.questionId);
       if (!question) throw { statusCode: 400, message: `Question ${mark.questionId} not found` };
-      if (mark.obtainedMarks > question.maxMarks) throw { statusCode: 400, message: `Marks for Q${question.questionNumber} cannot exceed ${question.maxMarks}` };
-      if (mark.obtainedMarks < 0) throw { statusCode: 400, message: `Marks for Q${question.questionNumber} cannot be negative` };
-      await markRepo.upsertMark(evaluation.id, mark.questionId, mark.obtainedMarks, 0);
-      totalObtained += mark.obtainedMarks;
+      // Use teacher-overridden max if provided, else fall back to DB max
+      const effectiveMax = (mark.overriddenMax && mark.overriddenMax > 0)
+        ? mark.overriddenMax
+        : question.maxMarks;
+      if (mark.obtainedMarks > effectiveMax)
+        throw { statusCode: 400, message: `Marks for Q${question.questionNumber} cannot exceed ${effectiveMax}` };
+      if (mark.obtainedMarks < 0)
+        throw { statusCode: 400, message: `Marks for Q${question.questionNumber} cannot be negative` };
+      // skipped questions contribute 0 and are excluded from total max
+      if (!mark.skipped) {
+        await markRepo.upsertMark(evaluation.id, mark.questionId, mark.obtainedMarks, 0);
+        totalObtained += mark.obtainedMarks;
+      }
     }
 
+    // --- Custom questions (free-form, stored as JSON) ---
+    const sanitisedCustom = [];
+    for (const cm of customMarks) {
+      const obtained = parseFloat(cm.obtainedMarks) || 0;
+      const max      = parseFloat(cm.maxMarks)      || 0;
+      if (!cm.skipped && obtained < 0) throw { statusCode: 400, message: `Marks for "${cm.questionNo || cm.label}" cannot be negative` };
+      if (!cm.skipped && max > 0 && obtained > max) throw { statusCode: 400, message: `Marks for "${cm.questionNo || cm.label}" cannot exceed ${max}` };
+      sanitisedCustom.push({
+        questionNo:    cm.questionNo   || cm.label || '',
+        label:         cm.questionNo   || cm.label || '',
+        obtainedMarks: cm.skipped ? 0 : obtained,
+        maxMarks:      max,
+        skipped:       cm.skipped || false,
+      });
+      if (!cm.skipped) totalObtained += obtained;
+    }
+
+    // total max = sum of active (non-skipped) question maxMarks (using overrides) + custom question maxMarks
+    const dbMaxTotal = marks
+      .filter((m) => !m.skipped)
+      .reduce((s, m) => {
+        const question = answerSheet.exam.questions.find((q) => q.id === m.questionId);
+        const effectiveMax = (m.overriddenMax && m.overriddenMax > 0) ? m.overriddenMax : (question?.maxMarks || 0);
+        return s + effectiveMax;
+      }, 0);
+    const customMaxTotal = sanitisedCustom.reduce((s, c) => s + c.maxMarks, 0);
+    // If no marks sent at all (e.g. first save), fall back to exam totalMarks
+    const maxMarksTotal = marks.length > 0 ? dbMaxTotal + customMaxTotal : answerSheet.exam.totalMarks + customMaxTotal;
+
     const totalConverted = targetMarks > 0 ? convertMarks(totalObtained, maxMarksTotal, targetMarks) : 0;
+
     await evaluationRepo.update(evaluation.id, {
-      totalObtainedMarks: totalObtained,
+      totalObtainedMarks:  totalObtained,
       totalConvertedMarks: Math.round(totalConverted * 100) / 100,
-      targetMarks: targetMarks || 0,
+      targetMarks:         targetMarks || 0,
       remarks,
+      customMarks:         sanitisedCustom,
     });
     await answerSheetRepo.updateStatus(answersheetId, "IN_PROGRESS");
 
     return {
-      id: evaluation.id,
-      totalObtainedMarks: totalObtained,
+      id:                  evaluation.id,
+      totalObtainedMarks:  totalObtained,
       totalConvertedMarks: Math.round(totalConverted * 100) / 100,
-      targetMarks: targetMarks || 0,
-      maxMarks: maxMarksTotal,
+      targetMarks:         targetMarks || 0,
+      maxMarks:            maxMarksTotal,
+      customMarks:         sanitisedCustom,
     };
   }
 
-  async submitEvaluation(answersheetId, marks, remarks = "", targetMarks = 0) {
+  async submitEvaluation(answersheetId, marks, remarks = "", targetMarks = 0, customMarks = []) {
     const { AnswerSheetRepository, EvaluationRepository } = await import("../repositories/index.js");
     const answerSheetRepo = new AnswerSheetRepository();
-    const evaluationRepo = new EvaluationRepository();
-    const result = await this.saveEvaluationDraft(answersheetId, marks, remarks, targetMarks);
+    const evaluationRepo  = new EvaluationRepository();
+    const result = await this.saveEvaluationDraft(answersheetId, marks, remarks, targetMarks, customMarks);
     const evaluation = await evaluationRepo.findByAnswerSheetId(answersheetId);
     await evaluationRepo.update(evaluation.id, { status: "SUBMITTED" });
     await answerSheetRepo.updateStatus(answersheetId, "COMPLETED");

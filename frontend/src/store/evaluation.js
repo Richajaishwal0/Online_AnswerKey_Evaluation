@@ -18,10 +18,10 @@ export const useEvaluationStore = create((set) => ({
     }
   },
 
-  saveDraft: async (answerSheetId, marksArray, remarks, targetMarks) => {
+  saveDraft: async (answerSheetId, marksArray, remarks, targetMarks, customMarks = []) => {
     set({ isSaving: true, error: null });
     try {
-      const response = await evaluationService.saveDraft(answerSheetId, marksArray, remarks, targetMarks);
+      const response = await evaluationService.saveDraft(answerSheetId, marksArray, remarks, targetMarks, customMarks);
       set({ isSaving: false });
       return response.data;
     } catch (error) {
@@ -30,10 +30,10 @@ export const useEvaluationStore = create((set) => ({
     }
   },
 
-  submitEvaluation: async (answerSheetId, marksArray, remarks, targetMarks) => {
+  submitEvaluation: async (answerSheetId, marksArray, remarks, targetMarks, customMarks = []) => {
     set({ isSaving: true, error: null });
     try {
-      const response = await evaluationService.submitEvaluation(answerSheetId, marksArray, remarks, targetMarks);
+      const response = await evaluationService.submitEvaluation(answerSheetId, marksArray, remarks, targetMarks, customMarks);
       set({ isSaving: false });
       return response.data;
     } catch (error) {

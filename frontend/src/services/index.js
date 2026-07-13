@@ -65,21 +65,28 @@ export const evaluationService = {
     return response.data;
   },
 
-  saveDraft: async (answerSheetId, marks, remarks, targetMarks) => {
+  saveDraft: async (answerSheetId, marks, remarks, targetMarks, customMarks = []) => {
     const response = await apiClient.post(
       `/evaluations/${answerSheetId}/draft`,
-      { marks, remarks, targetMarks },
+      { marks, remarks, targetMarks, customMarks },
     );
     return response.data;
   },
 
-  submitEvaluation: async (answerSheetId, marks, remarks, targetMarks) => {
+  submitEvaluation: async (answerSheetId, marks, remarks, targetMarks, customMarks = []) => {
     const response = await apiClient.post(
       `/evaluations/${answerSheetId}/submit`,
-      { marks, remarks, targetMarks },
+      { marks, remarks, targetMarks, customMarks },
     );
     return response.data;
   },
+};
+
+export const teacherAnswerKeyService = {
+  list: async () => (await apiClient.get('/answer-keys/teacher')).data,
+  upload: async (formData) =>
+    (await apiClient.post('/answer-keys/teacher/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
+  remove: async (id) => (await apiClient.delete(`/answer-keys/teacher/${id}`)).data,
 };
 
 export const adminService = {

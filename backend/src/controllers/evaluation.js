@@ -23,7 +23,7 @@ export class EvaluationController {
   async saveDraft(req, res) {
     try {
       const { answerSheetId } = req.params;
-      const { marks, remarks, targetMarks } = req.body;
+      const { marks, remarks, targetMarks, customMarks } = req.body;
 
       if (!marks || !Array.isArray(marks)) {
         return sendErrorResponse(res, HTTP_STATUS.BAD_REQUEST, 'Marks array required');
@@ -34,6 +34,7 @@ export class EvaluationController {
         marks,
         remarks || '',
         targetMarks || 0,
+        customMarks || [],
       );
 
       sendResponse(res, HTTP_STATUS.OK, result, SUCCESS_MESSAGES.DRAFT_SAVED);
@@ -49,7 +50,7 @@ export class EvaluationController {
   async submitEvaluation(req, res) {
     try {
       const { answerSheetId } = req.params;
-      const { marks, remarks, targetMarks } = req.body;
+      const { marks, remarks, targetMarks, customMarks } = req.body;
 
       const { error } = submitEvaluationValidator({ marks });
 
@@ -66,6 +67,7 @@ export class EvaluationController {
         marks,
         remarks || '',
         targetMarks || 0,
+        customMarks || [],
       );
 
       sendResponse(res, HTTP_STATUS.OK, result, SUCCESS_MESSAGES.SUBMISSION_SUCCESS);

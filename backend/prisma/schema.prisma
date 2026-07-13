@@ -24,7 +24,8 @@ model Faculty {
   updatedAt     DateTime        @updatedAt
 
   // Relations
-  assignedPapers AnswerSheet[]
+  assignedPapers   AnswerSheet[]
+  teacherAnswerKeys TeacherAnswerKey[]
 
   @@map("faculties")
 }
@@ -154,6 +155,7 @@ model Evaluation {
   totalConvertedMarks Float      @default(0)
   targetMarks   Int             @default(0)
   remarks       String?
+  customMarks   Json?           // [{label, obtainedMarks, maxMarks}]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -162,6 +164,26 @@ model Evaluation {
   marks         Mark[]
 
   @@map("evaluations")
+}
+
+// Teacher Answer Key Model (teacher-uploaded, independent of Exam)
+model TeacherAnswerKey {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  facultyId    String   @db.ObjectId
+  title        String
+  department   String?
+  subject      String?
+  examName     String?
+  year         String?
+  semester     String?
+  notes        String?
+  fileUrl      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  faculty      Faculty  @relation(fields: [facultyId], references: [id])
+
+  @@map("teacher_answer_keys")
 }
 
 // Mark Model

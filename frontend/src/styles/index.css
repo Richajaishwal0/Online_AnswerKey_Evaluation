@@ -77,3 +77,11 @@
   /* ── Divider ── */
   .divider { @apply border-t border-gray-200 dark:border-gray-800; }
 }
+
+/* ── Fullscreen evaluation mode ── */
+/* The fixed overlay already covers sidebar+navbar visually.
+   These rules also hide them from layout so no scroll bleed occurs. */
+body.eval-fullscreen aside,
+body.eval-fullscreen header {
+  visibility: hidden;
+}

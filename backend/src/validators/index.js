@@ -54,7 +54,7 @@ export const submitEvaluationValidator = (data) => {
     marks: Joi.array()
       .items(
         Joi.object({
-          questionId: Joi.number().required(),
+          questionId: Joi.string().required(),
           obtainedMarks: Joi.number().min(0).required(),
         }),
       )
